@@ -1,0 +1,313 @@
+---
+title: "Untitled"
+author: "Connor Train"
+date: "2024-08-26"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(tidyr)
+library(conflicted)
+
+```
+
+
+## Question 1
+
+```{r}
+# Load the cleaned data
+data <- read.csv("updated_2023-2024_Team_Alphabetical.csv")
+
+
+```
+
+```{r}
+# Calculate differential metrics with the new column names
+data <- data %>%
+  mutate(
+    Diff_eFG_Pct = Off_eFG_Pct - Def_eFG_Pct,
+    Diff_TOV_Pct = Off_TOV_Pct - Def_TOV_Pct,
+    Diff_ORB_Pct = Off_ORB_Pct - Def_DRB_Pct,
+    Diff_FTR = Off_FTR - Def_FTR
+  )
+
+
+```
+
+```{r}
+# Calculate the correlation between differential metrics and wins
+correlation_eFG <- cor(data$Diff_eFG_Pct, data$W)
+correlation_TOV <- cor(data$Diff_TOV_Pct, data$W)
+correlation_ORB <- cor(data$Diff_ORB_Pct, data$W)
+correlation_FTR <- cor(data$Diff_FTR, data$W)
+
+cat("Correlation between Differential eFG_Pct and Wins: ", correlation_eFG, "\n")
+cat("Correlation between Differential TOV_Pct and Wins: ", correlation_TOV, "\n")
+cat("Correlation between Differential ORB_Pct and Wins: ", correlation_ORB, "\n")
+cat("Correlation between Differential FTR and Wins: ", correlation_FTR, "\n")
+
+```
+
+```{r}
+# Rank teams based on differential metrics and their Offensive Rating (ORtg)
+data <- data %>%
+  mutate(
+    eFG_Rank = rank(-Diff_eFG_Pct),  # Negative for descending order (higher eFG_Pct is better)
+    TOV_Rank = rank(Diff_TOV_Pct),   # Positive for ascending order (lower TOV_Pct is better)
+    ORB_Rank = rank(-Diff_ORB_Pct),  # Negative for descending order (higher ORB_Pct is better)
+    FTR_Rank = rank(-Diff_FTR),      # Negative for descending order (higher FTR is better)
+    ORtg_Rank = rank(-ORtg)          # Negative for descending order (higher ORtg is better)
+  )
+
+# Rockets' rankings within the league and compare to other teams
+data %>%
+  dplyr::filter(Team == "Houston Rockets" | 
+                Team %in% c("Dallas Mavericks", "Memphis Grizzlies", 
+                            "San Antonio Spurs", "New Orleans Pelicans")) %>%
+  select(Team, eFG_Rank, TOV_Rank, ORB_Rank, FTR_Rank, ORtg_Rank)
+
+```
+
+```{r}
+# Scatter plot of Wins vs. Differential eFG_Pct with label for Houston Rockets 
+ggplot(data, aes(x = Diff_eFG_Pct, y = W)) +
+  geom_point(color = ifelse(data$Team == "Houston Rockets", "red", "blue")) +
+  geom_smooth(method = "lm", color = "darkgray") +  # Add a linear trendline
+  geom_text(data = subset(data, Team == "Houston Rockets"),
+            aes(label = Team), vjust = -0.5, hjust = 0.5, color = "black", size = 4) +  # Label only the Rockets
+  labs(title = "Wins vs. Differential eFG_Pct",
+       x = "Differential eFG_Pct",
+       y = "Wins") +
+  theme_minimal()
+
+```
+
+
+```{r}
+# Bar chart of Offensive Rating (ORtg) by Team with Rockets highlighted
+ggplot(data, aes(x = reorder(Team, -ORtg), y = ORtg, fill = Team == "Houston Rockets")) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("TRUE" = "red", "FALSE" = "lightblue")) +
+  labs(title = "Offensive Rating by Team",
+       x = "Team",
+       y = "Offensive Rating (ORtg)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")  
+
+
+
+
+```
+
+```{r}
+# Line graph of Turnover Percentage (TOV_Pct) by Team
+ggplot(data, aes(x = reorder(Team, TOV_Rank), y = Diff_TOV_Pct)) +
+  geom_line(group = 1, color = "red") +
+  geom_point(color = "red") +
+  geom_text(data = subset(data, Team == "Houston Rockets"),
+            aes(label = Team), vjust = -0.5, hjust = 0.5, color = "black", size = 4) +  # Label only the Rockets
+  labs(title = "Turnover Percentage by Team",
+       x = "Team",
+       y = "Differential TOV_Pct") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+```
+
+```{r}
+# Line graph of Differential eFG% (Diff_eFG_Pct) by Team
+ggplot(data, aes(x = reorder(Team, eFG_Rank), y = Diff_eFG_Pct)) +
+  geom_line(group = 1, color = "red") +
+  geom_point(color = "red") +
+  geom_text(data = subset(data, Team == "Houston Rockets"),
+            aes(label = Team), vjust = -0.5, hjust = 0.5, color = "black", size = 4) +  # Label only the Rockets
+  labs(title = "Differential eFG% by Team",
+       x = "Team",
+       y = "Differential eFG%") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+## Question 2
+
+```{r}
+# Perform the multiple linear regression
+model <- lm(W ~ Diff_eFG_Pct + Diff_TOV_Pct + Diff_ORB_Pct + Diff_FTR, data = data)
+
+# View the summary of the regression model
+summary(model)
+
+```
+
+```{r}
+# Filter Rockets
+rockets_data <- data %>% dplyr::filter(Team == "Houston Rockets")
+
+# Predicted wins for the Rockets
+predicted_wins <- predict(model, newdata = rockets_data)
+predicted_wins
+
+```
+
+```{r}
+# Compare predicted wins to actual wins for the Rockets
+actual_wins <- rockets_data$W
+cat("Predicted Wins: ", round(predicted_wins, 2), "\n")
+cat("Actual Wins: ", actual_wins, "\n")
+
+```
+
+```{r}
+# Calculate residuals for all teams
+data <- data %>%
+  mutate(Predicted_Wins = predict(model, newdata = data),
+         Residuals = W - Predicted_Wins)
+
+# View residuals for the Rockets
+rockets_residual <- data %>% dplyr::filter(Team == "Houston Rockets") %>%
+  select(Team, W, Predicted_Wins, Residuals)
+
+rockets_residual
+
+```
+
+```{r}
+# Plot residuals for all teams
+ggplot(data, aes(x = reorder(Team, Residuals), y = Residuals)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_text(aes(label = round(Residuals, 1)), vjust = 0, hjust = 0.5, angle = 90, color = "black", size = 3.5) +  
+  labs(title = "Residuals (Actual Wins - Predicted Wins) by Team",
+       x = "Team",
+       y = "Residuals (Wins)") +
+   theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+## Question 3
+
+
+```{r}
+# Load the dataset
+player_data <- read_csv("2023-2024 NBA Player Stats - Regular.csv")
+
+```
+
+```{r}
+# Remove the 'Rk' (Rank) column as it's not needed for classification
+player_data <- player_data %>% select(-Rk)
+
+# Handle any missing values 
+player_data <- na.omit(player_data)
+
+```
+
+```{r}
+# Select relevant columns for player classification
+player_data <- player_data %>%
+  select(Player, Pos, Tm, PTS, AST, TRB, STL, BLK, eFG_Pct)
+
+```
+
+```{r}
+# Aggregate the player stats by summing or averaging where appropriate
+player_data_aggregated <- player_data %>%
+  group_by(Player) %>%
+  summarize(
+    PTS = sum(PTS),
+    AST = sum(AST),
+    TRB = sum(TRB),
+    STL = sum(STL),
+    BLK = sum(BLK),
+    eFG_Pct = mean(eFG_Pct)  
+  )
+
+```
+
+```{r}
+# Standardize the data
+player_data_scaled <- player_data_aggregated %>%
+  mutate(across(c(PTS, AST, TRB, STL, BLK, eFG_Pct), scale))
+
+
+```
+
+```{r}
+# Set a seed for reproducibility
+set.seed(42)
+
+# Perform K-Means clustering with 5 clusters
+kmeans_result <- kmeans(player_data_scaled[, c('PTS', 'AST', 'TRB', 'STL', 'BLK', 'eFG_Pct')], centers = 5)
+
+# Add the cluster assignment to the data
+player_data_scaled$Cluster <- kmeans_result$cluster
+
+```
+
+```{r}
+# Summarize the clusters to understand the player types
+cluster_summary <- player_data_scaled %>%
+  group_by(Cluster) %>%
+  summarize(
+    Avg_PTS = mean(PTS),
+    Avg_AST = mean(AST),
+    Avg_TRB = mean(TRB),
+    Avg_STL = mean(STL),
+    Avg_BLK = mean(BLK),
+    Avg_eFG_Pct = mean(eFG_Pct)
+  )
+
+```
+
+```{r}
+# Scatter plot of Points per Game (PTS) vs. Assists per Game (AST) colored by Cluster
+ggplot(player_data_scaled, aes(x = PTS, y = AST, color = as.factor(Cluster))) +
+  geom_point(size = 2) +
+  labs(title = "Player Clusters: Points vs. Assists",
+       x = "Points per Game (PTS)",
+       y = "Assists per Game (AST)",
+       color = "Cluster") +
+  theme_minimal()
+
+```
+
+```{r}
+# Scatter plot of Rebounds per Game (TRB) vs. Blocks per Game (BLK) colored by Cluster
+ggplot(player_data_scaled, aes(x = TRB, y = BLK, color = as.factor(Cluster))) +
+  geom_point(size = 2) +
+  labs(title = "Player Clusters: Rebounds vs. Blocks",
+       x = "Rebounds per Game (TRB)",
+       y = "Blocks per Game (BLK)",
+       color = "Cluster") +
+  theme_minimal()
+
+```
+
+```{r}
+# Calculate the average metrics for each cluster for a bar plot
+cluster_avg <- cluster_summary %>%
+  pivot_longer(cols = -Cluster, names_to = "Metric", values_to = "Value")
+
+# Bar plot of average metrics by cluster
+ggplot(cluster_avg, aes(x = Metric, y = Value, fill = as.factor(Cluster))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Metrics by Cluster",
+       x = "Metric",
+       y = "Average Value",
+       fill = "Cluster") +
+  theme_minimal()
+
+```
