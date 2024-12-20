@@ -1,0 +1,160 @@
+---
+title: "Win Probability"
+author: "Connor Train"
+date: "2024-07-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(nflreadr)
+library(dplyr)
+library(ggplot2)
+library(caTools)
+library(ROCR)
+```
+
+
+
+```{r}
+
+pbp_data <- load_pbp(2023)
+
+```
+
+
+
+```{r}
+
+# Add the winner column
+
+pbp_data <- pbp_data %>%
+  mutate(winner = ifelse(total_home_score > total_away_score, home_team, away_team))
+
+# Create outcome variable
+
+pbp_data <- pbp_data %>%
+  mutate(poswins = as.factor(ifelse(winner == posteam, "Yes", "No")))
+
+```
+
+
+```{r}
+# Step 3: Filter and select specified variables
+filtered_pbp <- pbp_data %>%
+  filter(
+    qtr <= 4 & 
+    !is.na(poswins) & 
+    play_type != "no_play" & 
+    !is.na(play_type) &
+    !is.na(down)
+  ) %>%
+  select(
+    game_id, game_date, posteam, home_team, away_team, yardline_100, qtr,
+    game_seconds_remaining, poswins, down, ydstogo, score_differential, 
+    home_wp, away_wp, wp, desc
+  )
+
+
+```
+
+
+```{r}
+# Step 4: Split Data into Training and Testing Sets (if desired)
+set.seed(123)  # For reproducibility
+split <- sample.split(filtered_pbp$poswins, SplitRatio = 0.7)
+training_set <- subset(filtered_pbp, split == TRUE)
+testing_set <- subset(filtered_pbp, split == FALSE)
+
+```
+
+
+
+```{r}
+# Step 5: Build the Logistic Regression Model
+model <- glm(
+  poswins ~ qtr + down + ydstogo + game_seconds_remaining + yardline_100 + score_differential,
+  data = training_set,
+  family = binomial
+)
+
+# Step 6: Evaluate the Model
+summary(model)
+
+```
+
+
+
+
+```{r}
+
+# Predict on the testing set
+predicted_probs <- predict(model, newdata = testing_set, type = "response")
+predicted_classes <- ifelse(predicted_probs > 0.5, "Yes", "No")
+
+# Calculate accuracy
+accuracy <- mean(predicted_classes == testing_set$poswins)
+cat("Model Accuracy: ", round(accuracy, 3), "\n")
+
+
+```
+
+
+
+
+```{r}
+
+# Additional metrics (e.g., AUC)
+pred <- prediction(predicted_probs, testing_set$poswins)
+perf <- performance(pred, "tpr", "fpr")
+auc <- performance(pred, "auc")@y.values[[1]]
+cat("AUC: ", round(auc, 3), "\n")
+
+# Plot ROC Curve
+plot(perf, col = "blue", main = "ROC Curve")
+abline(a = 0, b = 1, lty = 2, col = "red")
+
+
+```
+
+###Question 2
+
+```{r}
+# Filter for the specific game_id '2023_11_CHI_DET'
+specific_game <- filtered_pbp %>%
+  filter(game_id == '2023_11_CHI_DET') %>%
+  mutate(
+    time_remaining = game_seconds_remaining / 60  # Convert to minutes
+  )
+
+# Plot win probabilities for the specific game
+ggplot(specific_game) +
+  geom_line(aes(x = time_remaining, y = home_wp, color = "Detroit Lions"), size = 1.5) +
+  geom_line(aes(x = time_remaining, y = away_wp, color = "Chicago Bears"), size = 1.5) +
+  scale_color_manual(values = c("Detroit Lions" = "steelblue2", "Chicago Bears" = "orangered2")) +
+  labs(
+    title = "Win Probability Model",
+    subtitle = "DET 31 CHI 26",
+    x = "Time Remaining (minutes)",
+    y = "Win Probability",
+    color = "Team"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.text.x = element_text(hjust = .5),
+    panel.grid.major = element_line(color = "grey", size = 0.5),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_x_reverse(breaks = seq(0, 60, by = 15), labels = c("0", "15", "30", "45", "60")) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "black") 
+
+```
+
+
+
